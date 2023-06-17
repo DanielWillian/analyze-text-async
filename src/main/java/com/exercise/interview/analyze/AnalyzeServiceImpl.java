@@ -1,8 +1,6 @@
 package com.exercise.interview.analyze;
 
-import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Maybe;
-import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.Single;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import lombok.AllArgsConstructor;
@@ -19,28 +17,34 @@ public class AnalyzeServiceImpl implements AnalyzeService {
     }
 
     private Single<AnalyzeResponse> analyzeInternal(String text) {
-        log.info("Analyzing text: {}", text);
+        String lowerCase = text.toLowerCase();
+        log.info("Analyzing text: {}", lowerCase);
 
-        Maybe<String> lexical = textRepository.getTexts()
+        int charValue = charValue(lowerCase);
+
+        Maybe<TextCacheComparison> lexical = textRepository.getTexts()
                 .map(t -> TextCacheComparison.of(t, text.compareTo(t.getText())))
-                .reduce((lhs, rhs) -> closerLexical(lhs, rhs) ? lhs : rhs)
-                .map(TextCacheComparison::getTextCache)
-                .map(TextCache::getText);
+                .reduce((lhs, rhs) -> closerLexical(lhs, rhs) ? lhs : rhs);
 
-        int charValue = charValue(text);
-
-        Maybe<String> value = textRepository.getTexts()
+        Maybe<TextCacheComparison> value = textRepository.getTexts()
                 .map(t -> TextCacheComparison.of(t, Math.abs(t.getCharValue() - charValue)))
-                .reduce((lhs, rhs) -> closerValue(lhs, rhs) ? lhs : rhs)
-                .map(TextCacheComparison::getTextCache)
-                .map(TextCache::getText);
+                .reduce((lhs, rhs) -> closerValue(lhs, rhs) ? lhs : rhs);
 
-        return Maybe.zip(lexical, value, AnalyzeResponse::of)
+        return Maybe.zip(value, lexical, (TextCacheComparison v, TextCacheComparison l) -> {
+                log.info("Text {} has closest value {} with distance {} and closest lexical {} with distance {}",
+                    lowerCase,
+                    v.getTextCache().getText(),
+                    v.getComparison(),
+                    l.getTextCache().getText(),
+                    l.getComparison());
+
+                return AnalyzeResponse.of(v.getTextCache().getText(), l.getTextCache().getText());
+            })
                 .defaultIfEmpty(AnalyzeResponse.of(null, null))
                 .doOnSuccess(r -> {
                     log.info("Response: {}", r);
 
-                    textRepository.saveText(Single.just(TextCache.of(text, charValue)));
+                    textRepository.saveText(Single.just(TextCache.of(lowerCase, charValue)));
                 });
     }
 
@@ -74,7 +78,10 @@ public class AnalyzeServiceImpl implements AnalyzeService {
         int result = 0;
 
         for (char c : text.toCharArray()) {
-            result += Character.compare(Character.toLowerCase(c), 'a') + 1;
+            if (!Character.isLetter(c)) {
+                throw new IllegalArgumentException("Invalid character " + c + " on text: " + text);
+            }
+            result += Character.compare(c, 'a') + 1;
         }
 
         return result;
