@@ -28,21 +28,12 @@ public class MainVerticle extends AbstractVerticle {
 
     @Override
     public void start(Promise<Void> startPromise) throws Exception {
-        PgConnectOptions connectOptions = new PgConnectOptions()
-                .setPort(config().getInteger("PGPORT", 5432))
-                .setHost(config().getString("PGHOST", "localhost"))
-                .setDatabase(config().getString("PGDATABASE", "postgres"))
-                .setUser(config().getString("PGUSER", "postgres"))
-                .setPassword(config().getString("PGPASSWORD", "postgres"));
-
-        PoolOptions poolOptions = new PoolOptions().setMaxSize(config().getInteger("PGCONNECTIONS", 20));
-
-        SqlClient client = PgPool.client(vertx, connectOptions, poolOptions);
+        SqlClient client = createSqlClient();
 
         textRepository = new TextRepositoryImpl(client);
         analyzeService = new AnalyzeServiceImpl(textRepository);
 
-        Future<Void> loadTexts =  textRepository.loadTexts();
+        Future<Void> loadTexts =  loadCache();
 
         Router router = Router.router(vertx);
         router.route().handler(BodyHandler.create());
@@ -68,5 +59,30 @@ public class MainVerticle extends AbstractVerticle {
                         startPromise.fail(ar.cause());
                     }
                 });
+    }
+
+    private SqlClient createSqlClient() {
+        if (!isToUseDb()) return null;
+
+        PgConnectOptions connectOptions = new PgConnectOptions()
+            .setPort(config().getInteger("PGPORT", 5432))
+            .setHost(config().getString("PGHOST", "localhost"))
+            .setDatabase(config().getString("PGDATABASE", "postgres"))
+            .setUser(config().getString("PGUSER", "postgres"))
+            .setPassword(config().getString("PGPASSWORD", "postgres"));
+
+        PoolOptions poolOptions = new PoolOptions().setMaxSize(config().getInteger("PGCONNECTIONS", 20));
+
+        return PgPool.client(vertx, connectOptions, poolOptions);
+    }
+
+    private Future<Void> loadCache() {
+        if (!isToUseDb()) return Future.succeededFuture();
+
+       return textRepository.loadTexts();
+    }
+
+    private boolean isToUseDb() {
+        return !"false".equalsIgnoreCase(config().getString("USE_DB", "true"));
     }
 }
