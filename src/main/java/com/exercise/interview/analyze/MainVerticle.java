@@ -35,7 +35,7 @@ public class MainVerticle extends AbstractVerticle {
                 .setUser(config().getString("PGUSER", "postgres"))
                 .setPassword(config().getString("PGPASSWORD", "postgres"));
 
-        PoolOptions poolOptions = new PoolOptions().setMaxSize(5);
+        PoolOptions poolOptions = new PoolOptions().setMaxSize(config().getInteger("PGCONNECTIONS", 20));
 
         SqlClient client = PgPool.client(vertx, connectOptions, poolOptions);
 
