@@ -31,11 +31,15 @@ public class AnalyzeServiceImpl implements AnalyzeService {
         int charValue = charValue(text);
 
         Maybe<TextLexical> lexical = Flowable.fromIterable(texts)
+                .parallel()
                 .map(t -> TextLexical.of(t.getText(), calcLexicalDistance(text, t.getText())))
+                .reduce(AnalyzeServiceImpl::closerLexical)
                 .reduce(AnalyzeServiceImpl::closerLexical);
 
         Maybe<TextCacheComparison> value = Flowable.fromIterable(texts)
+                .parallel()
                 .map(t -> TextCacheComparison.of(t, Math.abs(t.getCharValue() - charValue)))
+                .reduce((lhs, rhs) -> closerValue(lhs, rhs) ? lhs : rhs)
                 .reduce((lhs, rhs) -> closerValue(lhs, rhs) ? lhs : rhs);
 
         return Maybe.zip(value, lexical, (TextCacheComparison v, TextLexical l) -> {
