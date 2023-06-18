@@ -1,6 +1,8 @@
 package com.exercise.interview.analyze;
 
+import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Single;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.impl.ConcurrentHashSet;
@@ -22,25 +24,37 @@ public class TextRepositoryImpl implements TextRepository {
     @Override
     public Future<Void> loadTexts() {
         return sqlClient.query("SELECT txt, value FROM Texts")
-            .execute()
-            .onFailure(t -> log.error("Can not execute query", t))
-            .onSuccess(this::fromRows)
-            .mapEmpty();
+                .execute()
+                .flatMap(this::fromRows)
+                .onFailure(t -> log.error("Could not load texts", t));
     }
 
-    private void fromRows(RowSet<Row> rows) {
+    private Future<Void> fromRows(RowSet<Row> rows) {
+        log.info("Received rows");
+
+        return Future.future(p -> setCache(p, rows));
+    }
+
+    private void setCache(Promise<Void> promise, RowSet<Row> rows) {
+        Completable.fromAction(() -> setCache(rows))
+                .subscribeOn(Schedulers.computation())
+                .subscribe(promise::complete, promise::fail);
+    }
+
+    private void setCache(RowSet<Row> rows) {
         log.info("Clearing cache");
 
         textCacheSet.clear();
 
         rows.forEach(this::fromRow);
+
+        log.info("Cache loaded");
     }
 
     private void fromRow(Row row) {
         String text = row.getString("txt");
         int charValue = row.getInteger("value");
         TextCache textCache = TextCache.of(text, charValue);
-        log.info("Adding cache: {}", textCache);
         textCacheSet.add(textCache);
     }
 
