@@ -22,23 +22,23 @@ public class AnalyzeServiceImpl implements AnalyzeService {
 
         int charValue = charValue(lowerCase);
 
-        Maybe<TextCacheComparison> lexical = textRepository.getTexts()
-                .map(t -> TextCacheComparison.of(t, text.compareTo(t.getText())))
-                .reduce((lhs, rhs) -> closerLexical(lhs, rhs) ? lhs : rhs);
+        Maybe<TextLexical> lexical = textRepository.getTexts()
+                .map(t -> TextLexical.of(t.getText(), calcLexicalDistance(lowerCase, t.getText())))
+                .reduce(AnalyzeServiceImpl::closerLexical);
 
         Maybe<TextCacheComparison> value = textRepository.getTexts()
                 .map(t -> TextCacheComparison.of(t, Math.abs(t.getCharValue() - charValue)))
                 .reduce((lhs, rhs) -> closerValue(lhs, rhs) ? lhs : rhs);
 
-        return Maybe.zip(value, lexical, (TextCacheComparison v, TextCacheComparison l) -> {
+        return Maybe.zip(value, lexical, (TextCacheComparison v, TextLexical l) -> {
                 log.info("Text {} has closest value {} with distance {} and closest lexical {} with distance {}",
                     lowerCase,
                     v.getTextCache().getText(),
                     v.getComparison(),
-                    l.getTextCache().getText(),
-                    l.getComparison());
+                    l.getText(),
+                    l.getDistance());
 
-                return AnalyzeResponse.of(v.getTextCache().getText(), l.getTextCache().getText());
+                return AnalyzeResponse.of(v.getTextCache().getText(), l.getText());
             })
                 .defaultIfEmpty(AnalyzeResponse.of(null, null))
                 .doOnSuccess(r -> {
@@ -48,15 +48,27 @@ public class AnalyzeServiceImpl implements AnalyzeService {
                 });
     }
 
-    private static boolean closerLexical(TextCacheComparison lhs, TextCacheComparison rhs) {
-        int lhsAbs = Math.abs(lhs.getComparison());
-        int rhsAbs = Math.abs(rhs.getComparison());
+    private static int[] calcLexicalDistance(String lhs, String rhs) {
+        int size = Math.min(lhs.length(), rhs.length());
+        int[] distance = new int[size];
 
-        if (lhsAbs == rhsAbs) {
-            return lhs.getTextCache().getText().compareTo(rhs.getTextCache().getText()) > 0;
+        for (int i = 0; i < size; i++) {
+            distance[i] = Math.abs(lhs.charAt(i) - rhs.charAt(i));
         }
 
-        return lhsAbs < rhsAbs;
+        return distance;
+    }
+
+    private static TextLexical closerLexical(TextLexical lhs, TextLexical rhs) {
+        int size = Math.min(lhs.getDistance().length, rhs.getDistance().length);
+
+        for (int i = 0; i < size; i++) {
+            if (lhs.getDistance()[i] == rhs.getDistance()[i]) continue;
+
+            return lhs.getDistance()[i] < rhs.getDistance()[i] ? lhs : rhs;
+        }
+
+        return lhs.getText().compareTo(rhs.getText()) > 0 ? lhs : rhs;
     }
 
     private static boolean closerValue(TextCacheComparison lhs, TextCacheComparison rhs) {
