@@ -31,15 +31,13 @@ public class AnalyzeServiceImpl implements AnalyzeService {
         int charValue = charValue(text);
 
         Maybe<TextLexical> lexical = Flowable.fromIterable(texts)
-                .parallel()
+                .subscribeOn(Schedulers.computation())
                 .map(t -> TextLexical.of(t.getText(), calcLexicalDistance(text, t.getText())))
-                .reduce(AnalyzeServiceImpl::closerLexical)
                 .reduce(AnalyzeServiceImpl::closerLexical);
 
         Maybe<TextCacheComparison> value = Flowable.fromIterable(texts)
-                .parallel()
+                .subscribeOn(Schedulers.computation())
                 .map(t -> TextCacheComparison.of(t, Math.abs(t.getCharValue() - charValue)))
-                .reduce((lhs, rhs) -> closerValue(lhs, rhs) ? lhs : rhs)
                 .reduce((lhs, rhs) -> closerValue(lhs, rhs) ? lhs : rhs);
 
         return Maybe.zip(value, lexical, (TextCacheComparison v, TextLexical l) -> {
@@ -56,7 +54,8 @@ public class AnalyzeServiceImpl implements AnalyzeService {
                 .doOnSuccess(r -> {
                     log.info("Response: {}", r);
 
-                    textRepository.saveText(Single.just(TextCache.of(text, charValue)));
+                    textRepository.saveText(Single.just(TextCache.of(text, charValue)))
+                            .onFailure(t -> log.error("Could not save text: " + text, t));
                 });
     }
 
