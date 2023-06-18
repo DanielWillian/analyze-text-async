@@ -1,10 +1,13 @@
 package com.exercise.interview.analyze;
 
+import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Maybe;
 import io.reactivex.rxjava3.core.Single;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import java.util.Set;
 
 @AllArgsConstructor
 @Slf4j
@@ -13,26 +16,31 @@ public class AnalyzeServiceImpl implements AnalyzeService {
 
     @Override
     public Single<AnalyzeResponse> analyze(Single<String> text) {
-        return text.flatMap(t -> analyzeInternal(t).subscribeOn(Schedulers.computation()));
+        return text.map(String::toLowerCase)
+                .flatMap(this::analyzeInternal);
     }
 
     private Single<AnalyzeResponse> analyzeInternal(String text) {
-        String lowerCase = text.toLowerCase();
-        log.info("Analyzing text: {}", lowerCase);
+        return textRepository.getTexts()
+                .flatMap(s -> analyzeWithTexts(text, s).subscribeOn(Schedulers.computation()));
+    }
 
-        int charValue = charValue(lowerCase);
+    private Single<AnalyzeResponse> analyzeWithTexts(String text, Set<TextCache> texts) {
+        log.info("Analyzing text: {}", text);
 
-        Maybe<TextLexical> lexical = textRepository.getTexts()
-                .map(t -> TextLexical.of(t.getText(), calcLexicalDistance(lowerCase, t.getText())))
+        int charValue = charValue(text);
+
+        Maybe<TextLexical> lexical = Flowable.fromIterable(texts)
+                .map(t -> TextLexical.of(t.getText(), calcLexicalDistance(text, t.getText())))
                 .reduce(AnalyzeServiceImpl::closerLexical);
 
-        Maybe<TextCacheComparison> value = textRepository.getTexts()
+        Maybe<TextCacheComparison> value = Flowable.fromIterable(texts)
                 .map(t -> TextCacheComparison.of(t, Math.abs(t.getCharValue() - charValue)))
                 .reduce((lhs, rhs) -> closerValue(lhs, rhs) ? lhs : rhs);
 
         return Maybe.zip(value, lexical, (TextCacheComparison v, TextLexical l) -> {
                 log.info("Text {} has closest value {} with distance {} and closest lexical {} with distance {}",
-                    lowerCase,
+                    text,
                     v.getTextCache().getText(),
                     v.getComparison(),
                     l.getText(),
@@ -44,7 +52,7 @@ public class AnalyzeServiceImpl implements AnalyzeService {
                 .doOnSuccess(r -> {
                     log.info("Response: {}", r);
 
-                    textRepository.saveText(Single.just(TextCache.of(lowerCase, charValue)));
+                    textRepository.saveText(Single.just(TextCache.of(text, charValue)));
                 });
     }
 

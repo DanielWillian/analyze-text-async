@@ -1,6 +1,5 @@
 package com.exercise.interview.analyze;
 
-import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Single;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
@@ -46,8 +45,8 @@ public class TextRepositoryImpl implements TextRepository {
     }
 
     @Override
-    public Flowable<TextCache> getTexts() {
-        return Flowable.fromIterable(textCacheSet);
+    public Single<Set<TextCache>> getTexts() {
+        return Single.just(textCacheSet);
     }
 
     @Override
