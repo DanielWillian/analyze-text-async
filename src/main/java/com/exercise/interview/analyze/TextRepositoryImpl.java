@@ -79,31 +79,27 @@ public class TextRepositoryImpl implements TextRepository {
     }
 
     @Override
-    public Future<Void> saveText(Single<TextCache> text) {
+    public Future<Void> saveText(TextCache text) {
         Promise<Void> promise = Promise.promise();
-        text.doOnSuccess(t -> {
-            if (!valueOrdered.contains(t)) {
-                log.info("Saving text: {}", t);
-                sqlClient.preparedQuery("INSERT INTO Texts (txt, value) VALUES ($1, $2)")
-                    .execute(Tuple.of(t.getText(), t.getCharValue()))
-                    .onComplete(ar -> {
-                        if (ar.succeeded()) {
-                            log.info("Saved text: {}", t);
-                            valueOrdered.add(t);
-                            textOrdered.add(t.getText());
-                            promise.complete();
-                        } else {
-                            log.info("Could not save text: {}", t);
-                            promise.fail(ar.cause());
-                        }
-                    });
-            } else {
-                log.info("Text already saved: {}", t);
-                promise.fail("Already exists!");
-            }
-        })
-                .doOnError(promise::fail)
-                .subscribe();
+        if (!valueOrdered.contains(text)) {
+            log.info("Saving text: {}", text);
+            sqlClient.preparedQuery("INSERT INTO Texts (txt, value) VALUES ($1, $2)")
+                .execute(Tuple.of(text.getText(), text.getCharValue()))
+                .onComplete(ar -> {
+                    if (ar.succeeded()) {
+                        log.info("Saved text: {}", text);
+                        valueOrdered.add(text);
+                        textOrdered.add(text.getText());
+                        promise.complete();
+                    } else {
+                        log.info("Could not save text: {}", text);
+                        promise.fail(ar.cause());
+                    }
+                });
+        } else {
+            log.info("Text already saved: {}", text);
+            promise.fail("Already exists!");
+        }
 
         return promise.future();
     }

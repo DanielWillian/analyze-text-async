@@ -13,5 +13,5 @@ public interface TextRepository {
 
     Single<List<TextCache>> getOrderedValue();
 
-    Future<Void> saveText(Single<TextCache> text);
+    Future<Void> saveText(TextCache text);
 }
