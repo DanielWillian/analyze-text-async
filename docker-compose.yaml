@@ -1,0 +1,31 @@
+version: '3.8'
+services:
+  app:
+    image: openjdk:11.0.16-jre-slim
+    networks:
+      - database
+    ports:
+      - "${PORT:-8888}:8888"
+    volumes:
+      - "${APP_JAR_HOME:-./target}:/opt/app"
+    command: [ "java", "-Xms256M", "-Xmx512M",
+        "-jar", "/opt/app/${APP_JAR_NAME:-analyze-1.0.0-SNAPSHOT-fat.jar}" ]
+    environment:
+      PGHOST: "postgres"
+      PGPORT: "5432"
+      PGUSER: "postgres"
+      PGPASSWORD: "${PGPASSWORD:-postgres}"
+      PGDATABASE: "postgres"
+      LOG_LEVEL: "WARN"
+    depends_on:
+      - postgres
+  postgres:
+    image: postgres:15-alpine
+    networks:
+      - database
+    ports:
+      - "${DBPORT:-5432}:5432"
+    environment:
+      POSTGRES_PASSWORD: "${PGPASSWORD:-postgres}"
+networks:
+  database: {}
