@@ -1,13 +1,12 @@
 package com.exercise.interview.analyze;
 
-import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Maybe;
 import io.reactivex.rxjava3.core.Single;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.Set;
+import java.util.List;
 
 @AllArgsConstructor
 @Slf4j
@@ -21,80 +20,73 @@ public class AnalyzeServiceImpl implements AnalyzeService {
     }
 
     private Single<AnalyzeResponse> analyzeInternal(String text) {
-        return textRepository.getTexts()
-                .flatMap(s -> analyzeWithTexts(text, s).subscribeOn(Schedulers.computation()));
-    }
-
-    private Single<AnalyzeResponse> analyzeWithTexts(String text, Set<TextCache> texts) {
         log.info("Analyzing text: {}", text);
 
         int charValue = charValue(text);
 
-        Maybe<TextLexical> lexical = Flowable.fromIterable(texts)
-                .subscribeOn(Schedulers.computation())
-                .map(t -> TextLexical.of(t.getText(), calcLexicalDistance(text, t.getText())))
-                .reduce(AnalyzeServiceImpl::closerLexical);
+        Maybe<String> closestLexical = textRepository.getOrderedText()
+                .flatMapMaybe(l -> closestLexical(text, l));
 
-        Maybe<TextCacheComparison> value = Flowable.fromIterable(texts)
-                .subscribeOn(Schedulers.computation())
-                .map(t -> TextCacheComparison.of(t, Math.abs(t.getCharValue() - charValue)))
-                .reduce((lhs, rhs) -> closerValue(lhs, rhs) ? lhs : rhs);
+        Maybe<String> closestValue = textRepository.getOrderedValue()
+                .flatMapMaybe(l -> closestValue(charValue, l));
 
-        return Maybe.zip(value, lexical, (TextCacheComparison v, TextLexical l) -> {
-                log.info("Text {} has closest value {} with distance {} and closest lexical {} with distance {}",
-                    text,
-                    v.getTextCache().getText(),
-                    v.getComparison(),
-                    l.getText(),
-                    l.getDistance());
+        return Maybe.zip(closestValue, closestLexical, (String v, String l) -> {
+                    log.info("Text {} has closest value {} and closest lexical {}", text, v, l);
 
-                return AnalyzeResponse.of(v.getTextCache().getText(), l.getText());
-            })
+                    return AnalyzeResponse.of(v, l);
+                })
                 .defaultIfEmpty(AnalyzeResponse.of(null, null))
                 .doOnSuccess(r -> {
                     log.info("Response: {}", r);
 
                     textRepository.saveText(Single.just(TextCache.of(text, charValue)))
-                            .onFailure(t -> log.error("Could not save text: " + text, t));
+                        .onFailure(t -> log.error("Could not save text: " + text, t));
                 });
     }
 
-    private static int[] calcLexicalDistance(String lhs, String rhs) {
-        int size = Math.min(lhs.length(), rhs.length());
-        int[] distance = new int[size];
+    private static Maybe<String> closestLexical(String text, List<String> texts) {
+        if (texts.isEmpty()) return Maybe.empty();
 
-        for (int i = 0; i < size; i++) {
-            distance[i] = Math.abs(lhs.charAt(i) - rhs.charAt(i));
-        }
+        return Maybe.fromCallable(() -> {
+            int start = 0;
+            int end = texts.size() - 1;
 
-        return distance;
-    }
+            while (start <= end) {
+                int mid = (start + end) / 2;
 
-    private static TextLexical closerLexical(TextLexical lhs, TextLexical rhs) {
-        int size = Math.min(lhs.getDistance().length, rhs.getDistance().length);
-
-        for (int i = 0; i < size; i++) {
-            if (lhs.getDistance()[i] == rhs.getDistance()[i]) continue;
-
-            return lhs.getDistance()[i] < rhs.getDistance()[i] ? lhs : rhs;
-        }
-
-        return lhs.getText().compareTo(rhs.getText()) > 0 ? lhs : rhs;
-    }
-
-    private static boolean closerValue(TextCacheComparison lhs, TextCacheComparison rhs) {
-        int lhsAbs = Math.abs(lhs.getComparison());
-        int rhsAbs = Math.abs(rhs.getComparison());
-
-        if (lhsAbs == rhsAbs) {
-            if (lhs.getTextCache().getCharValue() == rhs.getTextCache().getCharValue()) {
-                return lhs.getTextCache().getText().compareTo(rhs.getTextCache().getText()) < 0;
+                int compare = text.compareTo(texts.get(mid));
+                if (compare == 0) return texts.get(mid);
+                else if (compare < 0) end = mid - 1;
+                else start = mid + 1;
             }
 
-            return lhs.getTextCache().getCharValue() > rhs.getTextCache().getCharValue();
-        }
+            return texts.get(start);
+        })
+                .subscribeOn(Schedulers.computation());
+    }
 
-        return lhsAbs < rhsAbs;
+    private Maybe<String> closestValue(int charValue, List<TextCache> texts) {
+        if (texts.isEmpty()) return Maybe.empty();
+
+        return Maybe.fromCallable(() -> {
+            int start = 0;
+            int end = texts.size() - 1;
+
+            while (start <= end) {
+                int mid = (start + end) / 2;
+
+                if (charValue == texts.get(mid).getCharValue()) {
+                    end = mid - 1;
+                    start = mid;
+                } else if (charValue < texts.get(mid).getCharValue()) end = mid - 1;
+                else start = mid + 1;
+            }
+
+            while (start > 0 && texts.get(start).getCharValue() == texts.get(start - 1).getCharValue()) start--;
+
+            return texts.get(start).getText();
+        })
+            .subscribeOn(Schedulers.computation());
     }
 
     private static int charValue(String text) {
