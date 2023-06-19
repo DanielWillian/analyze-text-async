@@ -60,9 +60,35 @@ public class AnalyzeServiceImpl implements AnalyzeService {
                 else start = mid + 1;
             }
 
-            return texts.get(start);
+            int lhs = Math.max(0, start - 1);
+            int rhs = Math.min(texts.size() - 1, start);
+            int[] lhsDist = calcDist(text, texts.get(lhs));
+            int[] rhsDist = calcDist(text, texts.get(rhs));
+
+            return isCloser(lhsDist, rhsDist) ? texts.get(lhs) : texts.get(rhs);
         })
                 .subscribeOn(Schedulers.computation());
+    }
+
+    private static int[] calcDist(String lhs, String rhs) {
+        int[] result = new int[Math.min(lhs.length(), rhs.length())];
+
+        for (int i = 0; i < result.length; i++) {
+            result[i] = Math.abs(lhs.charAt(i) - rhs.charAt(i));
+        }
+
+        return result;
+    }
+
+    private static boolean isCloser(int[] lhs, int[] rhs) {
+        int minSize = Math.min(lhs.length, rhs.length);
+
+        for (int i = 0; i < minSize; i++) {
+            if (lhs[i] < rhs[i]) return true;
+            else if (lhs[i] > rhs[i]) return false;
+        }
+
+        return false;
     }
 
     private Maybe<String> closestValue(int charValue, List<Integer> values) {
@@ -82,8 +108,10 @@ public class AnalyzeServiceImpl implements AnalyzeService {
                 else start = mid + 1;
             }
 
-            return Math.abs(values.get(start) - charValue) <= Math.abs(values.get(start - 1) - charValue) ?
-                    values.get(start) : values.get(start - 1);
+            int lhs = Math.max(0, start - 1);
+            int rhs = Math.min(values.size() - 1, start);
+            return Math.abs(values.get(rhs) - charValue) <= Math.abs(values.get(lhs) - charValue) ?
+                    values.get(rhs) : values.get(lhs);
         })
                 .subscribeOn(Schedulers.computation())
                 .flatMapSingle(textRepository::getTextsWithValue)

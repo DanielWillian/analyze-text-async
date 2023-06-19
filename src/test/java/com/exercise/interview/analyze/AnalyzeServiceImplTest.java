@@ -61,7 +61,9 @@ class AnalyzeServiceImplTest {
         return Stream.of(
             arguments(List.of(3, 8), 8, List.of("dd"), "h", 8, "dd"),
             arguments(List.of(3, 8), 8, List.of("dd"), "f", 6, "dd"),
+            arguments(List.of(3, 8), 8, List.of("dd"), "j", 10, "dd"),
             arguments(List.of(3, 8), 3, List.of("aaa"), "e", 5, "aaa"),
+            arguments(List.of(3, 8), 3, List.of("aaa"), "a", 1, "aaa"),
             arguments(List.of(3, 7), 7, List.of("dc"), "e", 5, "dc"),
             arguments(List.of(7), 7, List.of("abd", "bad", "g"), "bad", 7, "abd")
         );
@@ -71,12 +73,12 @@ class AnalyzeServiceImplTest {
     @MethodSource("lexical")
     void testAnalyzeLexicalScenarios(List<String> orderedText, String text,
         Integer value, String closerText) {
-        when(textRepository.getOrderedText()).thenReturn(Single.just(List.of("c")));
+        when(textRepository.getOrderedText()).thenReturn(Single.just(orderedText));
         when(textRepository.getOrderedValue()).thenReturn(Single.just(List.of(3)));
         when(textRepository.getTextsWithValue(3)).thenReturn(Single.just(List.of("c")));
-        when(textRepository.saveText(TextCache.of("ab", 3))).thenReturn(Future.succeededFuture());
-        AnalyzeResponse response = analyzeService.analyze("ab").blockingGet();
-        assertEquals(AnalyzeResponse.of("c", "c"), response);
+        when(textRepository.saveText(TextCache.of(text, value))).thenReturn(Future.succeededFuture());
+        AnalyzeResponse response = analyzeService.analyze(text).blockingGet();
+        assertEquals(AnalyzeResponse.of("c", closerText), response);
     }
 
     static Stream<Arguments> lexical() {
@@ -85,9 +87,13 @@ class AnalyzeServiceImplTest {
             arguments(List.of("ab", "cde"), "cde", 12, "cde"),
             arguments(List.of("bdf", "egi"), "cd", 7, "bdf"),
             arguments(List.of("bdf", "egi"), "dc", 7, "egi"),
-            arguments(List.of("a", "d", "h"), "b", 2, "b"),
+            arguments(List.of("b", "d", "h"), "a", 1, "b"),
+            arguments(List.of("a", "d", "h"), "b", 2, "a"),
             arguments(List.of("a", "d", "h"), "e", 5, "d"),
             arguments(List.of("a", "d", "h"), "f", 6, "h"),
+            arguments(List.of("a", "ddd", "hhh"), "fff", 18, "hhh"),
+            arguments(List.of("a", "dde", "hhh"), "fff", 18, "dde"),
+            arguments(List.of("a", "ddd", "hhi"), "fff", 18, "ddd"),
             arguments(List.of("a", "d", "h"), "g", 7, "h"),
             arguments(List.of("abbc", "abef", "abhi", "abkl"), "abab", 6, "abbc"),
             arguments(List.of("abbc", "abef", "abhi", "abkl"), "abcd", 10, "abbc"),
