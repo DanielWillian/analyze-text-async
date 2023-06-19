@@ -38,13 +38,14 @@ public class AnalyzeServiceImpl implements AnalyzeService {
                 .doOnSuccess(r -> {
                     log.info("Response: {}", r);
 
-                    textRepository.saveText(Single.just(TextCache.of(text, charValue)))
-                        .onFailure(t -> log.error("Could not save text: " + text, t));
+                    textRepository.saveText(TextCache.of(text, charValue))
+                            .onFailure(t -> log.error("Could not save text: " + text, t));
                 });
     }
 
     private static Maybe<String> closestLexical(String text, List<String> texts) {
         if (texts.isEmpty()) return Maybe.empty();
+        if (texts.size() == 1) return Maybe.just(texts.get(0));
 
         return Maybe.fromCallable(() -> {
             int start = 0;
@@ -64,28 +65,29 @@ public class AnalyzeServiceImpl implements AnalyzeService {
                 .subscribeOn(Schedulers.computation());
     }
 
-    private Maybe<String> closestValue(int charValue, List<TextCache> texts) {
-        if (texts.isEmpty()) return Maybe.empty();
+    private Maybe<String> closestValue(int charValue, List<Integer> values) {
+        if (values.isEmpty()) return Maybe.empty();
 
         return Maybe.fromCallable(() -> {
+            if (values.size() == 1) return values.get(0);
+
             int start = 0;
-            int end = texts.size() - 1;
+            int end = values.size() - 1;
 
             while (start <= end) {
                 int mid = (start + end) / 2;
 
-                if (charValue == texts.get(mid).getCharValue()) {
-                    end = mid - 1;
-                    start = mid;
-                } else if (charValue < texts.get(mid).getCharValue()) end = mid - 1;
+                if (charValue == values.get(mid)) return values.get(mid);
+                else if (charValue < values.get(mid)) end = mid - 1;
                 else start = mid + 1;
             }
 
-            while (start > 0 && texts.get(start).getCharValue() == texts.get(start - 1).getCharValue()) start--;
-
-            return texts.get(start).getText();
+            return Math.abs(values.get(start) - charValue) <= Math.abs(values.get(start - 1) - charValue) ?
+                    values.get(start) : values.get(start - 1);
         })
-            .subscribeOn(Schedulers.computation());
+                .subscribeOn(Schedulers.computation())
+                .flatMapSingle(textRepository::getTextsWithValue)
+                .map(l -> l.get(0));
     }
 
     private static int charValue(String text) {

@@ -13,18 +13,18 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 
 @AllArgsConstructor
 @Slf4j
 public class TextRepositoryImpl implements TextRepository {
     private final SqlClient sqlClient;
-    private final Set<TextCache> valueOrdered = new ConcurrentSkipListSet<>(
-            Comparator.comparing(TextCache::getCharValue)
-            .thenComparing(TextCache::getText));
+    private final Set<Integer> valueOrdered = new ConcurrentSkipListSet<>();
+    private final Map<Integer, Set<String>> valueTextMap = new ConcurrentHashMap<>();
     private final Set<String> textOrdered = new ConcurrentSkipListSet<>();
 
     @Override
@@ -62,9 +62,16 @@ public class TextRepositoryImpl implements TextRepository {
         String text = row.getString("txt");
         int charValue = row.getInteger("value");
         TextCache textCache = TextCache.of(text, charValue);
-        valueOrdered.add(textCache);
+        cacheText(textCache);
         textOrdered.add(text);
     }
+
+    private void cacheText(TextCache textCache) {
+        valueOrdered.add(textCache.getCharValue());
+        valueTextMap.putIfAbsent(textCache.getCharValue(), new ConcurrentSkipListSet<>());
+        valueTextMap.get(textCache.getCharValue()).add(textCache.getText());
+    }
+
 
     @Override
     public Single<List<String>> getOrderedText() {
@@ -73,22 +80,28 @@ public class TextRepositoryImpl implements TextRepository {
     }
 
     @Override
-    public Single<List<TextCache>> getOrderedValue() {
-        return Single.<List<TextCache>>fromCallable(() -> new ArrayList<>(valueOrdered))
+    public Single<List<Integer>> getOrderedValue() {
+        return Single.<List<Integer>>fromCallable(() -> new ArrayList<>(valueOrdered))
+                .subscribeOn(Schedulers.computation());
+    }
+
+    @Override
+    public Single<List<String>> getTextsWithValue(int value) {
+        return Single.<List<String>>fromCallable(() -> new ArrayList<>(valueTextMap.get(value)))
                 .subscribeOn(Schedulers.computation());
     }
 
     @Override
     public Future<Void> saveText(TextCache text) {
         Promise<Void> promise = Promise.promise();
-        if (!valueOrdered.contains(text)) {
+        if (!textOrdered.contains(text.getText())) {
             log.info("Saving text: {}", text);
             sqlClient.preparedQuery("INSERT INTO Texts (txt, value) VALUES ($1, $2)")
                 .execute(Tuple.of(text.getText(), text.getCharValue()))
                 .onComplete(ar -> {
                     if (ar.succeeded()) {
                         log.info("Saved text: {}", text);
-                        valueOrdered.add(text);
+                        cacheText(text);
                         textOrdered.add(text.getText());
                         promise.complete();
                     } else {
