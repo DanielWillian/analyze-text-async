@@ -29,10 +29,23 @@ public class TextRepositoryImpl implements TextRepository {
 
     @Override
     public Future<Void> loadTexts() {
+        return createTableFuture()
+                .flatMap(v -> setCacheFuture());
+    }
+
+    private Future<Void> createTableFuture() {
+        return sqlClient.query(
+            "CREATE TABLE IF NOT EXISTS Texts (txt TEXT NOT NULL PRIMARY KEY, value INT NOT NULL)")
+            .execute()
+            .onComplete(s -> log.info("Created table"))
+            .mapEmpty();
+    }
+
+    private Future<Void> setCacheFuture() {
         return sqlClient.query("SELECT txt, value FROM Texts")
-                .execute()
-                .flatMap(this::fromRows)
-                .onFailure(t -> log.error("Could not load texts", t));
+            .execute()
+            .flatMap(this::fromRows)
+            .onFailure(t -> log.error("Could not load texts", t));
     }
 
     private Future<Void> fromRows(RowSet<Row> rows) {
