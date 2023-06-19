@@ -49,8 +49,6 @@ public class TextRepositoryImpl implements TextRepository {
     }
 
     private Future<Void> fromRows(RowSet<Row> rows) {
-        log.info("Received rows");
-
         return Future.future(p -> setCache(p, rows));
     }
 
@@ -108,22 +106,22 @@ public class TextRepositoryImpl implements TextRepository {
     public Future<Void> saveText(TextCache text) {
         Promise<Void> promise = Promise.promise();
         if (!textOrdered.contains(text.getText())) {
-            log.info("Saving text: {}", text);
+            log.debug("Saving text: {}", text);
             sqlClient.preparedQuery("INSERT INTO Texts (txt, value) VALUES ($1, $2)")
                 .execute(Tuple.of(text.getText(), text.getCharValue()))
                 .onComplete(ar -> {
                     if (ar.succeeded()) {
-                        log.info("Saved text: {}", text);
+                        log.debug("Saved text: {}", text);
                         cacheText(text);
                         textOrdered.add(text.getText());
                         promise.complete();
                     } else {
-                        log.info("Could not save text: {}", text);
+                        log.debug("Could not save text: {}", text);
                         promise.fail(ar.cause());
                     }
                 });
         } else {
-            log.info("Text already saved: {}", text);
+            log.debug("Text already saved: {}", text);
             promise.fail("Already exists!");
         }
 

@@ -19,7 +19,7 @@ public class AnalyzeServiceImpl implements AnalyzeService {
     }
 
     private Single<AnalyzeResponse> analyzeInternal(String text) {
-        log.info("Analyzing text: {}", text);
+        log.debug("Analyzing text: {}", text);
 
         int charValue = charValue(text);
 
@@ -29,14 +29,10 @@ public class AnalyzeServiceImpl implements AnalyzeService {
         Maybe<String> closestValue = textRepository.getOrderedValue()
                 .flatMapMaybe(l -> closestValue(charValue, l));
 
-        return Maybe.zip(closestValue, closestLexical, (String v, String l) -> {
-                    log.info("Text {} has closest value {} and closest lexical {}", text, v, l);
-
-                    return AnalyzeResponse.of(v, l);
-                })
+        return Maybe.zip(closestValue, closestLexical, AnalyzeResponse::of)
                 .defaultIfEmpty(AnalyzeResponse.of(null, null))
                 .doOnSuccess(r -> {
-                    log.info("Response: {}", r);
+                    log.debug("text: {}, response: {}", text, r);
 
                     textRepository.saveText(TextCache.of(text, charValue))
                             .onFailure(t -> log.error("Could not save text: " + text, t));

@@ -46,12 +46,13 @@ public class MainVerticle extends AbstractVerticle {
         router.post("/analyze").respond(context -> {
             String text = context.body().asJsonObject().getString("text");
 
-            log.info("Handling analyzing of text: {}", text);
+            log.debug("Handling analyzing of text: {}", text);
 
             Single<AnalyzeResponse> response = analyzeService.analyze(text);
 
             return SingleHelper.toFuture(response)
                     .onFailure(t -> log.error("Could not analyze text", t));
+        }).failureHandler(context -> {
         });
 
         Future<HttpServer> httpServer = vertx.createHttpServer().requestHandler(router).listen(8888)
