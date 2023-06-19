@@ -1,12 +1,14 @@
 package com.exercise.interview.analyze;
 
 import io.reactivex.rxjava3.core.Single;
+import io.vertx.config.ConfigRetriever;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Context;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpServer;
+import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.handler.BodyHandler;
 import io.vertx.pgclient.PgConnectOptions;
@@ -28,12 +30,16 @@ public class MainVerticle extends AbstractVerticle {
 
     @Override
     public void start(Promise<Void> startPromise) throws Exception {
-        SqlClient client = createSqlClient();
+        ConfigRetriever configRetriever = ConfigRetriever.create(vertx);
+        Future<Void> loadTexts = configRetriever.getConfig()
+                .flatMap(c -> {
+                    SqlClient client = createSqlClient(c);
 
-        textRepository = new TextRepositoryImpl(client);
-        analyzeService = new AnalyzeServiceImpl(textRepository);
+                    textRepository = new TextRepositoryImpl(client);
+                    analyzeService = new AnalyzeServiceImpl(textRepository);
 
-        Future<Void> loadTexts =  loadCache();
+                    return loadCache(c);
+                });
 
         Router router = Router.router(vertx);
         router.route().handler(BodyHandler.create());
@@ -61,28 +67,28 @@ public class MainVerticle extends AbstractVerticle {
                 });
     }
 
-    private SqlClient createSqlClient() {
-        if (!isToUseDb()) return null;
+    private SqlClient createSqlClient(JsonObject config) {
+        if (!isToUseDb(config)) return null;
 
         PgConnectOptions connectOptions = new PgConnectOptions()
-            .setPort(config().getInteger("PGPORT", 5432))
-            .setHost(config().getString("PGHOST", "localhost"))
-            .setDatabase(config().getString("PGDATABASE", "postgres"))
-            .setUser(config().getString("PGUSER", "postgres"))
-            .setPassword(config().getString("PGPASSWORD", "postgres"));
+                .setPort(config.getInteger("PGPORT", 5432))
+                .setHost(config.getString("PGHOST", "localhost"))
+                .setDatabase(config.getString("PGDATABASE", "postgres"))
+                .setUser(config.getString("PGUSER", "postgres"))
+                .setPassword(config.getString("PGPASSWORD", "postgres"));
 
-        PoolOptions poolOptions = new PoolOptions().setMaxSize(config().getInteger("PGCONNECTIONS", 20));
+        PoolOptions poolOptions = new PoolOptions().setMaxSize(config.getInteger("PGCONNECTIONS", 20));
 
         return PgPool.client(vertx, connectOptions, poolOptions);
     }
 
-    private Future<Void> loadCache() {
-        if (!isToUseDb()) return Future.succeededFuture();
+    private Future<Void> loadCache(JsonObject config) {
+        if (!isToUseDb(config)) return Future.succeededFuture();
 
        return textRepository.loadTexts();
     }
 
-    private boolean isToUseDb() {
-        return !"false".equalsIgnoreCase(config().getString("USE_DB", "true"));
+    private boolean isToUseDb(JsonObject config) {
+        return !"false".equalsIgnoreCase(config.getString("USE_DB", "true"));
     }
 }
