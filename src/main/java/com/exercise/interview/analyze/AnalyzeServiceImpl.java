@@ -14,9 +14,8 @@ public class AnalyzeServiceImpl implements AnalyzeService {
     private final TextRepository textRepository;
 
     @Override
-    public Single<AnalyzeResponse> analyze(Single<String> text) {
-        return text.map(String::toLowerCase)
-                .flatMap(this::analyzeInternal);
+    public Single<AnalyzeResponse> analyze(String text) {
+        return analyzeInternal(text.toLowerCase());
     }
 
     private Single<AnalyzeResponse> analyzeInternal(String text) {
