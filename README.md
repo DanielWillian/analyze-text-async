@@ -40,3 +40,11 @@ To test the API, send requests to `/analyze`, for example using curl:
 $ curl localhost:8888/analyze -d '{"text":"word"}'
 ```
 
+There is also a K6 script to run stress tests on the server `localhost:8888`, run the following command:
+
+```
+$ docker run --network="host" -i grafana/k6 run --vus 10 --duration 30s - < tests/k6/random-text.js
+```
+
+It continuously sends random texts to the server for 30 seconds on 10 different virtual users. At the end, K6 reports statistics about the API.
+
