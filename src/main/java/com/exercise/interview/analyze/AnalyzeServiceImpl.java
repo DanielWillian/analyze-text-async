@@ -15,12 +15,6 @@ public class AnalyzeServiceImpl implements AnalyzeService {
 
     @Override
     public Single<AnalyzeResponse> analyze(String text) {
-        return analyzeInternal(text.toLowerCase());
-    }
-
-    private Single<AnalyzeResponse> analyzeInternal(String text) {
-        log.debug("Analyzing text: {}", text);
-
         int charValue = charValue(text);
 
         Maybe<String> closestLexical = textRepository.getOrderedText()
@@ -50,7 +44,7 @@ public class AnalyzeServiceImpl implements AnalyzeService {
             while (start <= end) {
                 int mid = (start + end) / 2;
 
-                int compare = text.compareTo(texts.get(mid));
+                int compare = text.compareToIgnoreCase(texts.get(mid));
                 if (compare == 0) return texts.get(mid);
                 else if (compare < 0) end = mid - 1;
                 else start = mid + 1;
@@ -70,7 +64,7 @@ public class AnalyzeServiceImpl implements AnalyzeService {
         int[] result = new int[Math.min(lhs.length(), rhs.length())];
 
         for (int i = 0; i < result.length; i++) {
-            result[i] = Math.abs(lhs.charAt(i) - rhs.charAt(i));
+            result[i] = Math.abs(Character.toLowerCase(lhs.charAt(i)) - Character.toLowerCase(rhs.charAt(i)));
         }
 
         return result;
@@ -121,7 +115,7 @@ public class AnalyzeServiceImpl implements AnalyzeService {
             if (!Character.isLetter(c)) {
                 throw new InvalidRequestException("Invalid character " + c + " on text: " + text);
             }
-            result += Character.compare(c, 'a') + 1;
+            result += Character.compare(Character.toLowerCase(c), 'a') + 1;
         }
 
         return result;

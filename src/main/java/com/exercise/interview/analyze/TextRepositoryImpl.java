@@ -25,7 +25,7 @@ public class TextRepositoryImpl implements TextRepository {
     private final SqlClient sqlClient;
     private final Set<Integer> valueOrdered = new ConcurrentSkipListSet<>();
     private final Map<Integer, Set<String>> valueTextMap = new ConcurrentHashMap<>();
-    private final Set<String> textOrdered = new ConcurrentSkipListSet<>();
+    private final Set<String> textOrdered = new ConcurrentSkipListSet<>(String.CASE_INSENSITIVE_ORDER);
 
     @Override
     public Future<Void> loadTexts() {
@@ -79,7 +79,7 @@ public class TextRepositoryImpl implements TextRepository {
 
     private void cacheText(TextCache textCache) {
         valueOrdered.add(textCache.getCharValue());
-        valueTextMap.putIfAbsent(textCache.getCharValue(), new ConcurrentSkipListSet<>());
+        valueTextMap.putIfAbsent(textCache.getCharValue(), new ConcurrentSkipListSet<>(String.CASE_INSENSITIVE_ORDER));
         valueTextMap.get(textCache.getCharValue()).add(textCache.getText());
     }
 

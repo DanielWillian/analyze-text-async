@@ -63,6 +63,7 @@ class AnalyzeServiceImplTest {
             arguments(List.of(3, 8), 8, List.of("dd"), "f", 6, "dd"),
             arguments(List.of(3, 8), 8, List.of("dd"), "j", 10, "dd"),
             arguments(List.of(3, 8), 3, List.of("aaa"), "e", 5, "aaa"),
+            arguments(List.of(3, 8), 3, List.of("aaa"), "E", 5, "aaa"),
             arguments(List.of(3, 8), 3, List.of("aaa"), "a", 1, "aaa"),
             arguments(List.of(3, 7), 7, List.of("dc"), "e", 5, "dc"),
             arguments(List.of(7), 7, List.of("abd", "bad", "g"), "bad", 7, "abd")
@@ -84,10 +85,14 @@ class AnalyzeServiceImplTest {
     static Stream<Arguments> lexical() {
         return Stream.of(
             arguments(List.of("ab", "cde"), "ab", 3, "ab"),
+            arguments(List.of("ab", "cde"), "AB", 3, "ab"),
+            arguments(List.of("AB", "cde"), "ab", 3, "AB"),
             arguments(List.of("ab", "cde"), "cde", 12, "cde"),
             arguments(List.of("bdf", "egi"), "cd", 7, "bdf"),
             arguments(List.of("bdf", "egi"), "dc", 7, "egi"),
             arguments(List.of("b", "d", "h"), "a", 1, "b"),
+            arguments(List.of("b", "E", "h"), "D", 4, "E"),
+            arguments(List.of("B", "e", "h"), "C", 3, "B"),
             arguments(List.of("a", "d", "h"), "b", 2, "a"),
             arguments(List.of("a", "d", "h"), "e", 5, "d"),
             arguments(List.of("a", "d", "h"), "f", 6, "h"),
@@ -97,6 +102,7 @@ class AnalyzeServiceImplTest {
             arguments(List.of("a", "d", "h"), "g", 7, "h"),
             arguments(List.of("abbc", "abef", "abhi", "abkl"), "abab", 6, "abbc"),
             arguments(List.of("abbc", "abef", "abhi", "abkl"), "abcd", 10, "abbc"),
+            arguments(List.of("abbc", "abef", "abhi", "abkl"), "ABCD", 10, "abbc"),
             arguments(List.of("abbc", "abef", "abhi", "abkl"), "abde", 12, "abef"),
             arguments(List.of("abbc", "abef", "abhi", "abkl"), "abfg", 16, "abef"),
             arguments(List.of("abbc", "abef", "abhi", "abkl"), "abgh", 18, "abhi"),
