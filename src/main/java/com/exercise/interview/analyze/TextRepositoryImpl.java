@@ -122,7 +122,7 @@ public class TextRepositoryImpl implements TextRepository {
                 });
         } else {
             log.debug("Text already saved: {}", text);
-            promise.fail("Already exists!");
+            promise.complete();
         }
 
         return promise.future();

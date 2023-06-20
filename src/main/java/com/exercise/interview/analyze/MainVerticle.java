@@ -9,6 +9,7 @@ import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.json.JsonObject;
+import io.vertx.ext.web.RequestBody;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.handler.BodyHandler;
 import io.vertx.pgclient.PgConnectOptions;
@@ -17,6 +18,8 @@ import io.vertx.rxjava3.SingleHelper;
 import io.vertx.sqlclient.PoolOptions;
 import io.vertx.sqlclient.SqlClient;
 import lombok.extern.slf4j.Slf4j;
+
+import java.util.Optional;
 
 @Slf4j
 public class MainVerticle extends AbstractVerticle {
@@ -44,7 +47,10 @@ public class MainVerticle extends AbstractVerticle {
         Router router = Router.router(vertx);
         router.route().handler(BodyHandler.create());
         router.post("/analyze").respond(context -> {
-            String text = context.body().asJsonObject().getString("text");
+            String text = Optional.of(context.body())
+                    .map(RequestBody::asJsonObject)
+                    .map(j -> j.getString("text"))
+                    .orElseThrow(InvalidRequestException::new);
 
             log.debug("Handling analyzing of text: {}", text);
 
@@ -53,6 +59,12 @@ public class MainVerticle extends AbstractVerticle {
             return SingleHelper.toFuture(response)
                     .onFailure(t -> log.error("Could not analyze text", t));
         }).failureHandler(context -> {
+            Throwable t = context.failure();
+            log.error("Failed handling request", t);
+            int statusCode = t instanceof InvalidRequestException ? 400 : 500;
+            context.response()
+                    .setStatusCode(statusCode)
+                    .end();
         });
 
         Future<HttpServer> httpServer = vertx.createHttpServer().requestHandler(router).listen(8888)

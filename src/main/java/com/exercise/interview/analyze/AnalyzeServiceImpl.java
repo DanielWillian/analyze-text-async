@@ -119,7 +119,7 @@ public class AnalyzeServiceImpl implements AnalyzeService {
 
         for (char c : text.toCharArray()) {
             if (!Character.isLetter(c)) {
-                throw new IllegalArgumentException("Invalid character " + c + " on text: " + text);
+                throw new InvalidRequestException("Invalid character " + c + " on text: " + text);
             }
             result += Character.compare(c, 'a') + 1;
         }
