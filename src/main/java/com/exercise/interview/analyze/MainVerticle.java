@@ -11,6 +11,7 @@ import io.vertx.core.http.HttpServer;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.RequestBody;
 import io.vertx.ext.web.Router;
+import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.handler.BodyHandler;
 import io.vertx.pgclient.PgConnectOptions;
 import io.vertx.pgclient.PgPool;
@@ -34,50 +35,57 @@ public class MainVerticle extends AbstractVerticle {
     @Override
     public void start(Promise<Void> startPromise) throws Exception {
         ConfigRetriever configRetriever = ConfigRetriever.create(vertx);
-        Future<Void> loadTexts = configRetriever.getConfig()
-                .flatMap(c -> {
-                    SqlClient client = createSqlClient(c);
+        configRetriever.getConfig()
+                .onSuccess(c -> startServerWithConfig(c, startPromise))
+                .onFailure(startPromise::fail);
+    }
 
-                    textRepository = new TextRepositoryImpl(client);
-                    analyzeService = new AnalyzeServiceImpl(textRepository);
+    private void startServerWithConfig(JsonObject config, Promise<Void> startPromise) {
+        SqlClient client = createSqlClient(config);
 
-                    return loadCache(c);
-                });
+        textRepository = new TextRepositoryImpl(client);
+        analyzeService = new AnalyzeServiceImpl(textRepository);
+
+        Future<Void> loadTexts = loadCache(config);
 
         Router router = Router.router(vertx);
         router.route().handler(BodyHandler.create());
-        router.post("/analyze").respond(context -> {
-            String text = Optional.of(context.body())
-                    .map(RequestBody::asJsonObject)
-                    .map(j -> j.getString("text"))
-                    .orElseThrow(InvalidRequestException::new);
+        router.post("/analyze")
+                .respond(this::handleRequest)
+                .failureHandler(this::handleFailure);
 
-            log.debug("Handling analyzing of text: {}", text);
-
-            Single<AnalyzeResponse> response = analyzeService.analyze(text);
-
-            return SingleHelper.toFuture(response)
-                    .onFailure(t -> log.error("Could not analyze text", t));
-        }).failureHandler(context -> {
-            Throwable t = context.failure();
-            log.error("Failed handling request", t);
-            int statusCode = t instanceof InvalidRequestException ? 400 : 500;
-            context.response()
-                    .setStatusCode(statusCode)
-                    .end();
-        });
-
-        Future<HttpServer> httpServer = vertx.createHttpServer().requestHandler(router).listen(8888)
-                .onSuccess(http -> log.info("HTTP server started on port 8888"));
+        int port = config.getInteger("PORT", 8888);
+        Future<HttpServer> httpServer = vertx.createHttpServer()
+                .requestHandler(router)
+                .listen(port)
+                .onSuccess(http -> log.info("HTTP server started on port " + port));
 
         Future.join(loadTexts, httpServer)
-                .onComplete(ar -> {
-                    if (ar.succeeded()) {
-                        startPromise.complete();
-                    } else {
-                        startPromise.fail(ar.cause());
-                    }
-                });
+                .onSuccess(f -> startPromise.complete())
+                .onFailure(startPromise::fail);
+    }
+
+    private Future<AnalyzeResponse> handleRequest(RoutingContext context) {
+        String text = Optional.of(context.body())
+                .map(RequestBody::asJsonObject)
+                .map(j -> j.getString("text"))
+                .orElseThrow(InvalidRequestException::new);
+
+        log.debug("Handling analyzing of text: {}", text);
+
+        Single<AnalyzeResponse> response = analyzeService.analyze(text);
+
+        return SingleHelper.toFuture(response)
+                .onFailure(t -> log.error("Could not analyze text", t));
+    }
+
+    private void handleFailure(RoutingContext context) {
+        Throwable t = context.failure();
+        log.error("Failed handling request", t);
+        int statusCode = t instanceof InvalidRequestException ? 400 : 500;
+        context.response()
+                .setStatusCode(statusCode)
+                .end();
     }
 
     private SqlClient createSqlClient(JsonObject config) {
